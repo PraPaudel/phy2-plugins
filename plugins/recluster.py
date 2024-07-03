@@ -65,9 +65,7 @@ class Recluster(IPlugin):
                 """Relaunch KlustaKwik on selected clusters."""
                 # Selected clusters.
                 cluster_ids = controller.supervisor.selected
-                #spike_ids = controller.selector.select_spikes(cluster_ids)
-                bunchs = controller._amplitude_getter(cluster_ids, name='template', load_all=True)
-                spike_ids = bunchs[0].spike_ids
+                spike_ids = controller.selector.select_spikes(cluster_ids)
                 logger.info("Running KlustaKwik on %d spikes.", len(spike_ids))
                 # s = controller.supervisor.clustering.spikes_in_clusters(cluster_ids)
                 data3 = controller.model._load_features().data[spike_ids]
@@ -110,6 +108,89 @@ class Recluster(IPlugin):
                 controller.supervisor.actions.split(spike_ids, spike_clusters)
                 logger.warn("Reclustering complete!")
 
+# this updated version of Recluster_Local_PCAs_all() should skip if there are not enough spikes or if there is an error
+#This one also sorts the ids so it starts from cell 0. The original one used the current sorted cell ids from the gui. 
+# This to make sure the code runs appropriately if you want to 
+            @controller.supervisor.actions.add(shortcut='alt+r')
+            def Recluster_Local_PCAs_all():
+                def write_fet(fet, filepath):
+                    with open(filepath, 'w') as fd:
+                        #header line: number of features
+                        fd.write('%i\n' % fet.shape[1])
+                        #next lines: one feature vector per line
+                        for x in range(0,fet.shape[0]):
+                            fet[x,:].tofile(fd, sep="\t", format="%i")
+                            fd.write ("\n")
+
+                def read_clusters(filename_clu):
+                    clusters = load_text(filename_clu, np.int64)
+                    return process_clusters(clusters)
+                def process_clusters(clusters):
+                    return clusters[1:]
+                def load_text(filepath, dtype, skiprows=0, delimiter=' '):
+                    if not filepath:
+                        raise IOError("The filepath is empty.")
+                    with open(filepath, 'r') as f:
+                        for _ in range(skiprows):
+                            f.readline()
+                        x = pd.read_csv(f, header=None,
+                            sep=delimiter).values.astype(dtype).squeeze()
+                    return x
+                
+                """Relaunch KlustaKwik on selected clusters."""
+                # Selected clusters.
+                cluster_ids_iter = sorted(controller.supervisor.shown_cluster_ids.copy())
+                for cluster_ids in cluster_ids_iter:
+                    # skip if already noise or mua
+                    if (
+                        (controller.supervisor.get_cluster_info(cluster_ids)["group"] == 'noise') | 
+                        (controller.supervisor.get_cluster_info(cluster_ids)["group"] == 'mua')
+                    ):
+                        continue
+                    logger.info("Running KlustaKwik on %d cell.", cluster_ids)
+
+                    # cluster_ids needs to be a list
+                    cluster_ids = [cluster_ids]
+
+                    spike_ids = controller.selector.select_spikes(cluster_ids)
+                    if len(spike_ids) < 50:
+                        logger.warn("Not enough spikes to recluster.")
+                        continue
+                    logger.info("Running KlustaKwik on %d spikes.", len(spike_ids))
+                    data3 = controller.model._load_features().data[spike_ids]
+                    fet2 = np.reshape(data3,(data3.shape[0],data3.shape[1]*data3.shape[2]))
+
+                    dtype = np.int64
+                    factor = 2.**60
+
+                    factor = factor/np.abs(fet2).max()
+                    fet2 = (fet2 * factor).astype(dtype)
+
+                    fet = fet2
+
+                    name = 'tempClustering'
+                    shank = 3
+                    mainfetfile = os.path.join(name + '.fet.' + str(shank))
+                    write_fet(fet, mainfetfile)
+                    if platform.system() == 'Windows':
+                        program = os.path.join(phy_config_dir(),'klustakwik.exe')
+                    else:
+                        program = '~/klustakwik/KlustaKwik'
+                    cmd = [program, name, str(shank)]
+                    cmd +=["-UseDistributional",'0',"-MaxPossibleClusters",'20',"-MinClusters",'20']
+
+                    # Run KlustaKwik
+                    p = Popen(cmd)
+                    p.wait()
+                    # Read back the clusters
+                    try:
+                        spike_clusters = read_clusters(name + '.clu.' + str(shank))
+                        controller.supervisor.actions.split(spike_ids, spike_clusters)
+                        logger.warn("Reclustering complete!")
+                    except:
+                        logger.warn("Reclustering failed!")
+
+
             @controller.supervisor.actions.add(shortcut='alt+t')
             def Recluster_Global_PCAs():
                 def write_fet(fet, filepath):
@@ -140,9 +221,7 @@ class Recluster(IPlugin):
                 """Relaunch KlustaKwik on selected clusters."""
                 # Selected clusters.
                 cluster_ids = controller.supervisor.selected
-                #spike_ids = controller.selector.select_spikes(cluster_ids)
-                bunchs = controller._amplitude_getter(cluster_ids, name='template', load_all=True)
-                spike_ids = bunchs[0].spike_ids
+                spike_ids = controller.selector.select_spikes(cluster_ids)
                 logger.info("Running KlustaKwik on %d spikes.", len(spike_ids))
                 # s = controller.supervisor.clustering.spikes_in_clusters(cluster_ids)
                 data3 = controller.model._load_features().data[spike_ids]
@@ -193,11 +272,10 @@ class Recluster(IPlugin):
 
                 """
                 logger.warn("Running K-means clustering")
-
+                
                 cluster_ids = controller.supervisor.selected
-                #spike_ids = controller.selector.select_spikes(cluster_ids)
-                bunchs = controller._amplitude_getter(cluster_ids, name='template', load_all=True)
-                spike_ids = bunchs[0].spike_ids
+
+                spike_ids = controller.selector.select_spikes(cluster_ids)
                 s = controller.supervisor.clustering.spikes_in_clusters(cluster_ids)
                 data = controller.model._load_features()
                 data3 = data.data[spike_ids]
@@ -244,9 +322,7 @@ class Recluster(IPlugin):
                     return d
 
                 cluster_ids = controller.supervisor.selected
-                #spike_ids = controller.selector.select_spikes(cluster_ids)
-                bunchs = controller._amplitude_getter(cluster_ids, name='template', load_all=True)
-                spike_ids = bunchs[0].spike_ids
+                spike_ids = controller.selector.select_spikes(cluster_ids)
                 s = controller.supervisor.clustering.spikes_in_clusters(cluster_ids)
                 data = controller.model._load_features()
                 data3 = data.data[spike_ids]
