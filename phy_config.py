@@ -1,4 +1,3 @@
-
 # You can also put your plugins in ~/.phy/plugins/.
 
 from phy import IPlugin
@@ -18,5 +17,12 @@ except:
 c = get_config()
 c.Plugins.dirs = [r'~/.phy/plugins/']
 
-c.TemplateGUI.plugins = ['Recluster','RawDataFilterPlugin','CustomActionPlugin','SplitShortISI'] 
+c.TemplateGUI.plugins = [
+    'Recluster',
+    'RawDataFilterPlugin',
+    'CustomActionPlugin',
+    'SplitShortISI',
+    'AutoPipelinePlugin', 
+]
+
 # ['AmplitudeHistogram','ControllerSettings','Recluster','Export2neurosuite'] # c.KwikGUI.plugins = ['ControllerSettingsKwik']
