@@ -22,7 +22,6 @@ c.TemplateGUI.plugins = [
     'RawDataFilterPlugin',
     'CustomActionPlugin',
     'SplitShortISI',
-    'AutoClean', 
+    'AutoCleanISI',
+    'AutoCleanMahalanobis',
 ]
-
-# ['AmplitudeHistogram','ControllerSettings','Recluster','Export2neurosuite'] # c.KwikGUI.plugins = ['ControllerSettingsKwik']
