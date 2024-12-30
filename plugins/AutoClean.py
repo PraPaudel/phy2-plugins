@@ -13,7 +13,7 @@ class AutoClean(IPlugin):
         @connect
         def on_gui_ready(sender, gui):
             @controller.supervisor.actions.add(shortcut='alt+a')
-            def run_auto_pipeline():
+            def auto_clean():
                 """Run the automated pipeline for splitting clusters."""
                 logger.info("Starting automated pipeline...")
 
