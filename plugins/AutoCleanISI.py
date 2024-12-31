@@ -18,7 +18,7 @@ class AutoCleanISI(IPlugin):
                 logger.info("Starting ISI-based splitting...")
 
                 try:
-                    short_isi_sec = 0.0017
+                    short_isi_sec = 0.0015
                     for cid in controller.supervisor.clustering.cluster_ids:
                         spike_ids = controller.supervisor.clustering.spikes_per_cluster[cid]
                         if len(spike_ids) < 2:
