@@ -23,5 +23,6 @@ c.TemplateGUI.plugins = [
     'CustomActionPlugin',
     'SplitShortISI',
     'AutoCleanISI',
-    'AutoCleanMahalanobis',
+    'AutoCleanMahalanobis'
+    'AutoQuality',
 ]
