@@ -15,12 +15,12 @@ class SplitShortISI(IPlugin):
             #@gui.edit_actions.add(shortcut='alt+i')
             @controller.supervisor.actions.add(shortcut='alt+i')
             def VisualizeShortISI():
-                """Split all spikes with an interspike interval of less than 1.5 ms into a separate
+                """Split all spikes with an interspike interval of less than 2 ms into a separate
                 cluster. THIS IS FOR VISUALIZATION ONLY, it will show you where potential noise
                 spikes may be located. Re-merge the clusters again afterwards and cut the cluster with
                 another method!"""
                 
-                logger.info('Detecting spikes with ISI less than 1.5 ms')
+                logger.info('Detecting spikes with ISI less than 2 ms')
 
                 # Selected clusters across the cluster view and similarity view.
                 cluster_ids = controller.supervisor.selected
@@ -38,7 +38,7 @@ class SplitShortISI(IPlugin):
                 dspike_times = np.diff(spike_times)
 
                 labels = np.ones(len(dspike_times),'int64')
-                labels[dspike_times<.0015]=2
+                labels[dspike_times<.002]=2
                 labels = np.append(labels,1) #include last spike to match with len spike_ids
 
                 # We perform the clustering algorithm, which returns an integer for each
