@@ -21,7 +21,6 @@ c.TemplateGUI.plugins = [
     'Recluster',
     'RawDataFilterPlugin',
     'CustomActionPlugin',
-    'SplitShortISI',
     'AutoCleanISI',
     'AutoCleanMahalanobis',
     'AutoQuality',
