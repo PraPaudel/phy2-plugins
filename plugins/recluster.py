@@ -185,6 +185,101 @@ class Recluster(IPlugin):
                 controller.supervisor.actions.split(spike_ids, spike_clusters)
                 logger.warn("Reclustering complete!")
 
+            @controller.supervisor.actions.add(shortcut='alt+l', prompt=True, prompt_default=lambda: 3)
+            def Recluster_HighFiringRate_PCA(firing_rate_thresh):
+                """Recluster clusters with firing rate above threshold (Hz).
+                
+                Example: `3`
+                """
+                def write_fet(fet, filepath):
+                    with open(filepath, 'w') as fd:
+                        fd.write('%i\n' % fet.shape[1])
+                        for x in range(0,fet.shape[0]):
+                            fet[x,:].tofile(fd, sep="\t", format="%i")
+                            fd.write ("\n")
+                
+                def read_clusters(filename_clu):
+                    clusters = load_text(filename_clu, np.int64)
+                    return process_clusters(clusters)
+                    
+                def process_clusters(clusters):
+                    return clusters[1:]
+                    
+                def load_text(filepath, dtype, skiprows=0, delimiter=' '):
+                    if not filepath:
+                        raise IOError("The filepath is empty.")
+                    with open(filepath, 'r') as f:
+                        for _ in range(skiprows):
+                            f.readline()
+                        x = pd.read_csv(f, header=None,
+                            sep=delimiter).values.astype(dtype).squeeze()
+                    return x
+                
+                # Get all clusters
+                all_clusters = controller.supervisor.clustering.cluster_ids
+                high_fr_clusters = []
+                
+                # Calculate firing rate for each cluster and identify high firing rate ones
+                spike_times = controller.model.spike_times
+                for cluster_id in all_clusters:
+                    # Get spikes in this cluster
+                    cluster_spikes = controller.supervisor.clustering.spikes_in_clusters([cluster_id])
+                    if len(cluster_spikes) > 1:
+                        # Calculate firing rate (spikes/sec)
+                        cluster_times = spike_times[cluster_spikes]
+                        duration = cluster_times[-1] - cluster_times[0]
+                        if duration > 0:
+                            firing_rate = len(cluster_times) / duration
+                            if firing_rate > firing_rate_thresh:
+                                high_fr_clusters.append(cluster_id)
+                
+                if not high_fr_clusters:
+                    logger.warn("No clusters found with firing rate > %.1f Hz", firing_rate_thresh)
+                    return
+                
+                logger.info("Found %d clusters with firing rate > %.1f Hz", 
+                            len(high_fr_clusters), firing_rate_thresh)
+                
+                # For each high firing rate cluster, perform reclustering
+                for cluster_id in high_fr_clusters:
+                    logger.info("Reclustering cluster %d", cluster_id)
+                    spike_ids = controller.supervisor.clustering.spikes_in_clusters([cluster_id])
+                    
+                    # Extract features
+                    data3 = controller.model._load_features().data[spike_ids]
+                    fet2 = np.reshape(data3,(data3.shape[0],data3.shape[1]*data3.shape[2]))
+                    
+                    # Rescale for int64
+                    dtype = np.int64
+                    factor = 2.**60
+                    factor = factor/np.abs(fet2).max()
+                    fet2 = (fet2 * factor).astype(dtype)
+                    
+                    # Write features to file
+                    name = 'tempClustering'
+                    shank = 3
+                    mainfetfile = os.path.join(name + '.fet.' + str(shank))
+                    write_fet(fet2, mainfetfile)
+                    
+                    # Run KlustaKwik
+                    if platform.system() == 'Windows':
+                        program = os.path.join(phy_config_dir(),'klustakwik.exe')
+                    else:
+                        program = '~/klustakwik/KlustaKwik'
+                    
+                    cmd = [program, name, str(shank)]
+                    cmd +=["-UseDistributional",'0',"-MaxPossibleClusters",'20',"-MinClusters",'20']
+                    
+                    p = Popen(cmd)
+                    p.wait()
+                    
+                    # Apply the new clustering
+                    spike_clusters = read_clusters(name + '.clu.' + str(shank))
+                    controller.supervisor.actions.split(spike_ids, spike_clusters)
+                
+                logger.warn("High firing rate reclustering complete!")
+
+
             @controller.supervisor.actions.add(shortcut='alt+q', prompt=True, prompt_default=lambda: 2)
             def K_means_clustering(kmeanclusters):
                 """Select number of clusters.
