@@ -186,7 +186,7 @@ class Recluster(IPlugin):
                 logger.warn("Reclustering complete!")
 
             @controller.supervisor.actions.add(shortcut='alt+l', prompt=True, prompt_default=lambda: 3)
-            def Recluster_HighFiringRate_PCA(firing_rate_thresh):
+            def Recluster_HighFiringRate_PCAs(firing_rate_thresh):
                 """Recluster clusters with firing rate above threshold (Hz).
                 
                 Example: `3`
