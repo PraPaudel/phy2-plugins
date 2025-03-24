@@ -286,7 +286,7 @@ if __name__ == "__main__":
         epilog='Run this script in your Kilosort output directory containing params.py'
     )
     parser.add_argument('--sessions', nargs='+', help='List of paths to session directories (default: current directory)', default=['.'])
-    parser.add_argument('--threshold', type=float, default=3.0, help='Firing rate threshold in Hz (default: 3.0)')
+    parser.add_argument('--threshold', type=float, default=2.0, help='Firing rate threshold in Hz (default: 3.0)')
     parser.add_argument('--sample-rate', type=float, help='Sampling rate in Hz (default: read from params.py)')
     
     args = parser.parse_args()
