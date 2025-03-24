@@ -186,10 +186,10 @@ class Recluster(IPlugin):
                 logger.warn("Reclustering complete!")
 
 
-
             @controller.supervisor.actions.add(shortcut='alt+l', prompt=True, prompt_default=lambda: 2)
-            def Recluster_HighFiringRate_PCA(firing_rate_thresh):
+            def Recluster_Good_HighFiringRate_PCA(firing_rate_thresh):
                 """Recluster clusters with firing rate above threshold (Hz).
+                Only includes 'good' clusters.
                 
                 Example: `2`
                 """
@@ -224,8 +224,14 @@ class Recluster(IPlugin):
                 high_fr_clusters = []
                 
                 # Calculate firing rate for each cluster and identify high firing rate ones
+                # Also filter by cluster group (only include 'good' clusters)
                 spike_times = controller.model.spike_times
                 for cluster_id in all_clusters:
+                    # Check cluster group first - only include 'good' clusters
+                    group_label = controller.supervisor.cluster_meta.get('group', cluster_id)
+                    if group_label != 'good':
+                        continue
+                        
                     # Get spikes in this cluster
                     cluster_spikes = controller.supervisor.clustering.spikes_in_clusters([cluster_id])
                     if len(cluster_spikes) > 1:
@@ -238,15 +244,15 @@ class Recluster(IPlugin):
                                 high_fr_clusters.append(cluster_id)
                 
                 if not high_fr_clusters:
-                    logger.warn("No clusters found with firing rate > %.1f Hz", firing_rate_thresh)
+                    logger.warn("No good clusters found with firing rate > %.1f Hz", firing_rate_thresh)
                     return
                 
-                logger.info("Found %d clusters with firing rate > %.1f Hz", 
+                logger.info("Found %d good clusters with firing rate > %.1f Hz", 
                             len(high_fr_clusters), firing_rate_thresh)
                 
                 # For each high firing rate cluster, perform reclustering
                 for cluster_id in high_fr_clusters:
-                    logger.info("Reclustering cluster %d", cluster_id)
+                    logger.info("Reclustering good cluster %d", cluster_id)
                     spike_ids = controller.supervisor.clustering.spikes_in_clusters([cluster_id])
                     
                     # Extract features
