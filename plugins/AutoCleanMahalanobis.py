@@ -13,7 +13,7 @@ class AutoCleanMahalanobis(IPlugin):
         @connect
         def on_gui_ready(sender, gui):
             @controller.supervisor.actions.add(shortcut='shift+x', prompt=True, prompt_default=lambda: "9")
-            def Auto_Clean_Mahalanobis(threshold_str):
+            def Recluster_Good_HighFiringRate_Mahalanobis(threshold_str):
                 """Split clusters based on Mahalanobis distance outliers.
                 
                 Provide threshold value (default: 9)
