@@ -158,7 +158,7 @@ class CustomActionPlugin(IPlugin):
                 spike_times_per_cluster = {}
                 high_firing = []
                 low_firing = []
-                firing_threshold = 4.0  # Hz
+                firing_threshold = 2.0  # Hz
                 
                 for cl in good_clusters:
                     # Get spikes for this cluster
