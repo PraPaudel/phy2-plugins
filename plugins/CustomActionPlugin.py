@@ -1,4 +1,3 @@
-# import from plugins/action_status_bar.py
 """Show how to create new actions in the GUI.
 
 The first action just displays a message in the status bar.
@@ -64,31 +63,81 @@ class CustomActionPlugin(IPlugin):
 
 
             @controller.supervisor.actions.add(shortcut='ctrl+shift+f')
-            def select_first_cluster():
-                """Selects the cluster with the minimum cluster ID."""
-                logger.info("Selecting the first (minimum) cluster ID.")
+            def select_first_good_cluster():
+                """Selects the good cluster with the minimum cluster ID."""
+                logger.info("Selecting the first (minimum) good cluster ID.")
 
                 @controller.supervisor.cluster_view.get_ids
-                def highlight_first(cluster_ids):
+                def highlight_first_good(cluster_ids):
                     if not cluster_ids:
                         logger.warn("No clusters available to select.")
                         return
 
-                    first_id = min(cluster_ids)
-                    logger.info(f"First cluster ID to select: {first_id}")
-                    controller.supervisor.select(first_id)
+                    # Filter good clusters
+                    good_clusters = []
+                    for cl in cluster_ids:
+                        group_label = controller.supervisor.cluster_meta.get('group', cl)
+                        if group_label == 'good':
+                            good_clusters.append(cl)
+                    
+                    if not good_clusters:
+                        logger.warn("No good clusters available to select.")
+                        return
+                        
+                    first_good_id = min(good_clusters)
+                    logger.info(f"First good cluster ID to select: {first_good_id}")
+                    controller.supervisor.select(first_good_id)
 
             @controller.supervisor.actions.add(shortcut='ctrl+shift+l')
-            def select_last_cluster():
-                """Selects the cluster with the maximum cluster ID."""
-                logger.info("Selecting the last (maximum) cluster ID.")
+            def select_last_good_cluster():
+                """Selects the good cluster with the maximum cluster ID."""
+                logger.info("Selecting the last (maximum) good cluster ID.")
 
                 @controller.supervisor.cluster_view.get_ids
-                def highlight_last(cluster_ids):
+                def highlight_last_good(cluster_ids):
                     if not cluster_ids:
                         logger.warn("No clusters available to select.")
                         return
 
-                    last_id = max(cluster_ids)
-                    logger.info(f"Last cluster ID to select: {last_id}")
-                    controller.supervisor.select(last_id)
+                    # Filter good clusters
+                    good_clusters = []
+                    for cl in cluster_ids:
+                        group_label = controller.supervisor.cluster_meta.get('group', cl)
+                        if group_label == 'good':
+                            good_clusters.append(cl)
+                    
+                    if not good_clusters:
+                        logger.warn("No good clusters available to select.")
+                        return
+                        
+                    last_good_id = max(good_clusters)
+                    logger.info(f"Last good cluster ID to select: {last_good_id}")
+                    controller.supervisor.select(last_good_id)
+
+                    
+            @controller.supervisor.actions.add(shortcut='ctrl+shift+v')
+            def show_good_clusters_info():
+                """Shows information about 'good' clusters in a popup window."""
+                logger.info("Displaying information about 'good' clusters.")
+                
+                # Get all cluster IDs
+                cluster_ids = controller.supervisor.clustering.cluster_ids
+                
+                # Filter good clusters
+                good_clusters = []
+                for cl in cluster_ids:
+                    # Check the 'group' meta field for each cluster
+                    group_label = controller.supervisor.cluster_meta.get('group', cl)
+                    if group_label == 'good':
+                        good_clusters.append(cl)
+                
+                # Create message with the information
+                len_good = len(good_clusters)
+                message = f"Number of 'good' clusters: {len_good}\nGood cluster IDs: {good_clusters}"
+                
+                # Display in a popup window using Qt
+                from PyQt5.QtWidgets import QMessageBox
+                box = QMessageBox()
+                box.setWindowTitle("Good Clusters Info")
+                box.setText(message)
+                box.exec_()
