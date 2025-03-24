@@ -185,12 +185,16 @@ class Recluster(IPlugin):
                 controller.supervisor.actions.split(spike_ids, spike_clusters)
                 logger.warn("Reclustering complete!")
 
-            @controller.supervisor.actions.add(shortcut='alt+l', prompt=True, prompt_default=lambda: 3)
-            def Recluster_HighFiringRate_PCAs(firing_rate_thresh):
+
+
+            @controller.supervisor.actions.add(shortcut='alt+l', prompt=True, prompt_default=lambda: 2)
+            def Recluster_HighFiringRate_PCA(firing_rate_thresh):
                 """Recluster clusters with firing rate above threshold (Hz).
                 
-                Example: `3`
+                Example: `2`
                 """
+                firing_rate_thresh = float(firing_rate_thresh)
+                
                 def write_fet(fet, filepath):
                     with open(filepath, 'w') as fd:
                         fd.write('%i\n' % fet.shape[1])
@@ -261,7 +265,7 @@ class Recluster(IPlugin):
                     mainfetfile = os.path.join(name + '.fet.' + str(shank))
                     write_fet(fet2, mainfetfile)
                     
-                    # Run KlustaKwik
+                    # Run KlustaKwik with minimal parameters
                     if platform.system() == 'Windows':
                         program = os.path.join(phy_config_dir(),'klustakwik.exe')
                     else:
@@ -278,7 +282,6 @@ class Recluster(IPlugin):
                     controller.supervisor.actions.split(spike_ids, spike_clusters)
                 
                 logger.warn("High firing rate reclustering complete!")
-
 
             @controller.supervisor.actions.add(shortcut='alt+q', prompt=True, prompt_default=lambda: 2)
             def K_means_clustering(kmeanclusters):
