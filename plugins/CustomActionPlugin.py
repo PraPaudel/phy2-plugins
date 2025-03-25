@@ -331,6 +331,12 @@ class CustomActionPlugin(IPlugin):
                 next_btn.setMinimumWidth(100)  # Set consistent width
                 nav_layout.addWidget(next_btn)
                 
+                # Add "Mark for Review" button
+                review_btn = QPushButton("Mark for Review")
+                review_btn.setCheckable(True)  # Make it toggleable
+                review_btn.setMinimumWidth(130)  # Set consistent width
+                nav_layout.addWidget(review_btn)
+                
                 # Add navigation controls
                 nav_widget.setLayout(nav_layout)
                 individual_layout.addWidget(nav_widget)
@@ -338,6 +344,11 @@ class CustomActionPlugin(IPlugin):
                 # Neuron info label
                 neuron_label = QLabel("Current Neuron: ")
                 individual_layout.addWidget(neuron_label)
+                
+                # Add review status indication below neuron label
+                review_status_label = QLabel("")
+                review_status_label.setStyleSheet("color: #FF6600; font-weight: bold;")
+                individual_layout.addWidget(review_status_label)
                 
                 # Create figure for individual neuron visualization
                 neuron_figure = plt.figure(figsize=(9, 7))
@@ -356,9 +367,9 @@ class CustomActionPlugin(IPlugin):
                 # Collect all UI elements that need font updating
                 font_controlled_elements = [
                     # Labels
-                    font_label, summary_label, neuron_label,
+                    font_label, summary_label, neuron_label, review_status_label,
                     # Buttons
-                    prev_btn, next_btn,
+                    prev_btn, next_btn, review_btn,
                     # Comboboxes
                     sort_options, colorbar_range, cluster_selector,
                     # Text boxes
@@ -375,7 +386,7 @@ class CustomActionPlugin(IPlugin):
                     if label_item and label_item.widget():
                         font_controlled_elements.append(label_item.widget())
                 
-                # Function to update all fonts
+                # update all fonts
                 def update_fonts(size):
                     font = QFont()
                     font.setPointSize(size)
@@ -397,7 +408,65 @@ class CustomActionPlugin(IPlugin):
                 # Connect font spinner
                 font_spinner.valueChanged.connect(update_fonts)
                 
-                # Function to update the overview plots based on sorting options
+                # Initialize needs_review metadata if it doesn't exist
+                if 'needs_review' not in controller.model.metadata:
+                    controller.model.metadata['needs_review'] = {}
+                    logger.info("Initialized 'needs_review' metadata dictionary")
+                
+                # Safe method to check if a cluster needs review
+                def needs_review(cluster_id):
+                    try:
+                        # Check if the cluster ID exists in the metadata dictionary
+                        if cluster_id in controller.model.metadata['needs_review']:
+                            return controller.model.metadata['needs_review'][cluster_id] == "yes"
+                        return False
+                    except Exception as e:
+                        logger.error(f"Error checking review status: {e}")
+                        return False
+                
+                # toggle review status
+                def toggle_review_status():
+                    try:
+                        cluster_id = sorted_clusters[current_neuron_idx[0]]
+                        current_status = needs_review(cluster_id)
+                        
+                        # Update the review status ("yes" = needs review, "" = doesn't need review)
+                        new_status = "" if current_status else "yes"
+                        
+                        # Update the metadata dictionary
+                        controller.model.metadata['needs_review'][cluster_id] = new_status
+                        
+                        # Save the changes to disk
+                        controller.model.save_metadata('needs_review', controller.model.metadata['needs_review'])
+                        
+                        # Update button appearance and label
+                        update_review_status_display(cluster_id)
+                        
+                        # Log the change
+                        if new_status == "yes":
+                            logger.info(f"Marked cluster {cluster_id} for review")
+                        else:
+                            logger.info(f"Unmarked cluster {cluster_id} from review")
+                    except Exception as e:
+                        logger.error(f"Error toggling review status: {e}")
+                
+                # update review status display
+                def update_review_status_display(cluster_id):
+                    try:
+                        if needs_review(cluster_id):
+                            review_btn.setChecked(True)
+                            review_btn.setText("Unmark Review")
+                            review_status_label.setText("⚠️ This cluster is marked for later review/curation")
+                        else:
+                            review_btn.setChecked(False)
+                            review_btn.setText("Mark for Review")
+                            review_status_label.setText("")
+                    except Exception as e:
+                        logger.error(f"Error updating review display: {e}")
+                        
+                # Connect review button
+                review_btn.clicked.connect(toggle_review_status)
+                # update the overview plots based on sorting options
                 def update_overview_plots():
                     try:
                         # Get sorting option
@@ -536,6 +605,9 @@ class CustomActionPlugin(IPlugin):
                         
                         # Update dropdown to match current cluster
                         cluster_selector.setCurrentIndex(sorted_clusters.index(cluster_id))
+                        
+                        # Update review status display
+                        update_review_status_display(cluster_id)
                         
                         # Create a 2-row subplot layout
                         ax_line = neuron_figure.add_subplot(211)  # Top plot - line plot with smoothing
@@ -710,15 +782,27 @@ class CustomActionPlugin(IPlugin):
                 
                 # Connect sorting dropdown to update function
                 sort_options.currentIndexChanged.connect(update_overview_plots)
+                
                 # Set dialog layout and show
                 dialog.setLayout(main_layout)
+                
                 # Initialize view with first neuron
                 update_neuron_view()
+                
                 # Initial plot update
                 update_overview_plots()
+                
                 # Apply initial font size
                 update_fonts(font_spinner.value())
+                
+                # Add a note about review tags
+                review_note = QLabel("Note: Clusters marked for review will be saved in the 'needs_review' metadata field.\n"
+                                    "You can filter these in the Phy GUI using: needs_review == \"yes\"")
+                review_note.setStyleSheet("color: #555555; font-style: italic;")
+                main_layout.addWidget(review_note)
+                
                 # Explicitly set to first tab (Overview)
                 tab_widget.setCurrentIndex(0)
+                
                 # Execute dialog
                 dialog.exec_()
