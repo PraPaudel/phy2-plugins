@@ -23,7 +23,7 @@ c.TemplateGUI.plugins = [
     'CustomActionPlugin',
     'SplitShortISI',
     'CleanHighFiringRateMahalanobis',
-    'AutoQuality',
+    # 'AutoQuality',
     'colorSelectorPlugin',
     'customizeSelectorStatsPlugin'
 
