@@ -13,5 +13,5 @@ class customizeSelectorStatsPlugin(IPlugin):
 #bombcell columns
             controller.supervisor.columns = [
                 'id', 'fr', 'amp', 'sh', 'ch','n_spikes', 'quality',
-                'percentage_spikes_missing', 'presence_ratio', 'spatial_decay_slope', 
+                'percentage_spikes_missing', 'presence_ratio', 
                 ]
