@@ -8,7 +8,10 @@ class customizeSelectorStatsPlugin(IPlugin):
     def attach_to_controller(self, controller):
         @connect
         def on_controller_ready(sender):
-            controller.supervisor.columns = ['id', 'fr', 'amp', 'sh', 'ch','n_spikes', 'quality']
+            # controller.supervisor.columns = ['id', 'fr', 'amp', 'sh', 'ch','n_spikes', 'quality']
 
-            # controller.supervisor.columns = ['id', 'depth', 'fr', 'Amplitude', 'n_spikes', 'quality',
-            # 'fractionRPV', 'percentSpikesMissing'] # can be used if used bombcell during preprocessing
+#bombcell columns
+            controller.supervisor.columns = [
+                'id', 'fr', 'amp', 'sh', 'ch','n_spikes', 'quality',
+                'percentage_spikes_missing', 'presence_ratio', 'spatial_decay_slope', 
+                ]
