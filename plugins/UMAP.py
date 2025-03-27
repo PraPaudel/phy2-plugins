@@ -136,9 +136,9 @@ class ReclusterUMAP(IPlugin):
                 return
             self._shortcuts_created = True
 
-            @controller.supervisor.actions.add(shortcut='alt+u', prompt=True, prompt_default=lambda: 4)
+            @controller.supervisor.actions.add(shortcut='alt+l', prompt=True, prompt_default=lambda: 4)
             def umapGmmClustering(target_clusters):
-                """Fast UMAP-GMM Clustering with intelligent merging (Alt+U)"""
+                """Fast UMAP-GMM Clustering with intelligent merging (Alt+L)"""
                 try:
                     target_clusters = int(target_clusters)
                     if target_clusters < 2:
