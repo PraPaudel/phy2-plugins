@@ -329,10 +329,10 @@ class StableMahalanobisDetection(IPlugin):
                 return
             self._shortcuts_created = True
 
-            @controller.supervisor.actions.add(shortcut='alt+y')
+            @controller.supervisor.actions.add(shortcut='alt+x')
             def stable_mahalanobis_outliers():
                 """
-                Stable Mahalanobis Outlier Detection with visualization (Alt+Y)
+                Stable Mahalanobis Outlier Detection with visualization (Alt+X)
                 """
                 try:
                     # Get selected clusters and spikes
