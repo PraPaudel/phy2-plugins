@@ -22,9 +22,10 @@ c.TemplateGUI.plugins = [
     'RawDataFilterPlugin',
     'CustomActionPlugin',
     'SplitShortISI',
-    'CleanHighFiringRateMahalanobis',
     # 'AutoQuality',
     'colorSelectorPlugin',
-    'customizeSelectorStatsPlugin'
-
+    'customizeSelectorStatsPlugin',
+    'StableMahalanobisDetection',
+    'ImprovedISIAnalysis',
+    'ReclusterUMAP',
 ]
