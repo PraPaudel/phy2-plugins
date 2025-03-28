@@ -64,8 +64,8 @@ class ImprovedISIAnalysis(IPlugin):
                 return
             self._shortcuts_created = True
 
-            @controller.supervisor.actions.add(shortcut='alt+j')
-            def analyze_spike_patterns():
+            @controller.supervisor.actions.add(shortcut='alt+i')
+            def split_short_ISI():
                 """
                 Analyze spike patterns using multiple metrics:
                 - ISI violations
