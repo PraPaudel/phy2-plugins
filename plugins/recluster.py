@@ -36,7 +36,7 @@ class Recluster(IPlugin):
         #def on_create_cluster_views():
         def on_gui_ready(sender,gui):
             @controller.supervisor.actions.add(shortcut='alt+k')
-            def Recluster_Local_PCAs():
+            def Recluster_KlustaKwik_PCAs():
                 def write_fet(fet, filepath):
                     with open(filepath, 'w') as fd:
                         #header line: number of features
