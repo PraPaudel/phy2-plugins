@@ -23,7 +23,7 @@ c.TemplateGUI.plugins = [
     'CustomActionPlugin',
     # 'AutoQuality',
     'colorSelectorPlugin',
-    'customizeSelectorStatsPlugin',
+    # 'customizeSelectorStatsPlugin',
     'StableMahalanobisDetection',
     'ImprovedISIAnalysis',
     'ReclusterUMAP',
