@@ -27,4 +27,5 @@ c.TemplateGUI.plugins = [
     'StableMahalanobisDetection',
     'ImprovedISIAnalysis',
     'ReclusterUMAP',
+    'CleanInBatch',
 ]
