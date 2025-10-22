@@ -29,7 +29,7 @@ class colorSelectorPlugin(IPlugin):
             table tr[data-group='noise'] {
 
 
-            color: maroon;
+            color: gray;
             }
 
         """
