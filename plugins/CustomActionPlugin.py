@@ -4,6 +4,7 @@ The following actions are implemented:
 - Ctrl+Shift+F: Selects the first (minimum) good cluster ID.
 - Ctrl+Shift+L: Selects the last (maximum) good cluster ID.
 - Ctrl+Shift+R: Marks selected clusters as 'review' (displays in crimson color).
+- Ctrl+Shift+N: Selects the first cluster marked as 'review'.
 - Ctrl+Shift+V: Displays detailed information about 'good' clusters, including firing rate analysis.
 """
 
@@ -122,6 +123,17 @@ class CustomActionPlugin(IPlugin):
                 if selected_clusters:
                     for cluster_id in selected_clusters:
                         controller.supervisor.cluster_meta.set('group', cluster_id, 'review')
+
+            @controller.supervisor.actions.add(shortcut='ctrl+shift+n')
+            def select_first_review():
+                """Selects the first cluster marked as 'review'."""
+                @controller.supervisor.cluster_view.get_ids
+                def find_review(cluster_ids):
+                    for cl in cluster_ids:
+                        group_label = controller.supervisor.cluster_meta.get('group', cl)
+                        if group_label == 'review':
+                            controller.supervisor.select(cl)
+                            return
 
             @controller.supervisor.actions.add(shortcut='ctrl+shift+v')
             def show_good_clusters_info():
