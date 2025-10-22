@@ -3,6 +3,7 @@ The following actions are implemented:
 - Ctrl+C: Selects the first unsorted cluster.
 - Ctrl+Shift+F: Selects the first (minimum) good cluster ID.
 - Ctrl+Shift+L: Selects the last (maximum) good cluster ID.
+- Ctrl+Shift+R: Marks selected clusters as 'review' (displays in crimson color).
 - Ctrl+Shift+V: Displays detailed information about 'good' clusters, including firing rate analysis.
 """
 
@@ -22,12 +23,21 @@ import numpy as np
 from scipy.ndimage import gaussian_filter1d
 from matplotlib.colors import Normalize
 from matplotlib.ticker import MultipleLocator, AutoMinorLocator
+from phy.cluster.supervisor import ClusterView
 
 logger = logging.getLogger('phy')
 
 
 class CustomActionPlugin(IPlugin):
     def attach_to_controller(self, controller):
+        # Add custom CSS style for 'review' label - crimson color
+        ClusterView._styles += """
+            /* This CSS selector represents all rows for clusters marked for review. */
+            table tr[data-group='review'] {
+                font-weight: bold;
+                color: crimson;
+            }
+        """
         @connect
         def on_gui_ready(sender, gui):
 
@@ -105,7 +115,13 @@ class CustomActionPlugin(IPlugin):
                     logger.info(f"Last good cluster ID to select: {last_good_id}")
                     controller.supervisor.select(last_good_id)
 
- 
+            @controller.supervisor.actions.add(shortcut='ctrl+shift+r')
+            def mark_for_review():
+                """Marks selected clusters with 'review' label, displaying them in crimson color."""
+                selected_clusters = controller.supervisor.selected
+                if selected_clusters:
+                    for cluster_id in selected_clusters:
+                        controller.supervisor.cluster_meta.set('group', cluster_id, 'review')
 
             @controller.supervisor.actions.add(shortcut='ctrl+shift+v')
             def show_good_clusters_info():
