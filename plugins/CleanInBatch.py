@@ -1,12 +1,32 @@
-"""Mahalanobis Distance Splitter Plugin for Phy."""
+"""Batch Processing Plugin for Phy.
+
+Shortcuts:
+- Shift+X: Batch Mahalanobis splitting on high firing rate clusters (default threshold: 9)
+- Shift+K: Batch K-means clustering on 'review' clusters (default: 2 clusters)
+- Shift+I: Batch short ISI analysis on 'review' clusters
+- Shift+Alt+K: Batch KlustaKwik reclustering on 'review' clusters
+"""
 
 from phy import IPlugin, connect
 import numpy as np
 import logging
 from scipy.cluster.vq import kmeans2, whiten
 from scipy.spatial.distance import cdist
+import os
+import platform
+from subprocess import Popen
 
 logger = logging.getLogger('phy')
+
+try:
+    import pandas as pd
+except ImportError:
+    logger.warn("Package pandas not installed.")
+    
+try:
+    from phy.utils.config import phy_config_dir
+except ImportError:
+    logger.warn("phy_config_dir not available.")
 
 
 class CleanInBatch(IPlugin):
@@ -257,3 +277,114 @@ class CleanInBatch(IPlugin):
                 
                 except Exception as e:
                     logger.error(f"Error in batch short ISI: {str(e)}")
+
+            @controller.supervisor.actions.add(shortcut='shift+alt+k')
+            def Batch_KlustaKwik():
+                """Run KlustaKwik reclustering on all 'review' clusters in batch.
+                
+                Uses KlustaKwik algorithm for automatic clustering.
+                """
+                logger.info("Starting batch KlustaKwik reclustering on review clusters...")
+                
+                def write_fet(fet, filepath):
+                    """Write features to .fet file for KlustaKwik"""
+                    with open(filepath, 'w') as fd:
+                        fd.write('%i\n' % fet.shape[1])
+                        for x in range(0, fet.shape[0]):
+                            fet[x, :].tofile(fd, sep="\t", format="%i")
+                            fd.write("\n")
+                
+                def read_clusters(filename_clu):
+                    """Read cluster assignments from .clu file"""
+                    clusters = load_text(filename_clu, np.int64)
+                    return process_clusters(clusters)
+                
+                def process_clusters(clusters):
+                    """Remove first line (number of clusters) from .clu file"""
+                    return clusters[1:]
+                
+                def load_text(filepath, dtype, skiprows=0, delimiter=' '):
+                    """Load text file into numpy array"""
+                    if not filepath:
+                        raise IOError("The filepath is empty.")
+                    with open(filepath, 'r') as f:
+                        for _ in range(skiprows):
+                            f.readline()
+                        x = pd.read_csv(f, header=None, sep=delimiter).values.astype(dtype).squeeze()
+                    return x
+                
+                try:
+                    # Get all cluster IDs and filter by 'review' group
+                    all_cluster_ids = controller.supervisor.clustering.cluster_ids
+                    review_clusters = []
+                    
+                    for cid in all_cluster_ids:
+                        group_label = controller.supervisor.cluster_meta.get('group', cid)
+                        if group_label == 'review':
+                            review_clusters.append(cid)
+                    
+                    if not review_clusters:
+                        logger.warn("No 'review' clusters found")
+                        return
+                    
+                    logger.info(f"Processing {len(review_clusters)} review clusters with KlustaKwik")
+                    
+                    # Process each review cluster
+                    clusters_processed = 0
+                    
+                    for cid in review_clusters:
+                        # Get spikes for this cluster
+                        spike_ids = controller.supervisor.clustering.spikes_in_clusters([cid])
+                        
+                        if len(spike_ids) < 20:
+                            logger.info(f"Cluster {cid} has too few spikes ({len(spike_ids)}), skipping")
+                            continue
+                        
+                        logger.info(f"Running KlustaKwik on cluster {cid} with {len(spike_ids)} spikes")
+                        
+                        # Load and prepare features
+                        data3 = controller.model._load_features().data[spike_ids]
+                        fet2 = np.reshape(data3, (data3.shape[0], data3.shape[1] * data3.shape[2]))
+                        
+                        # Convert to integer format for KlustaKwik
+                        dtype = np.int64
+                        factor = 2.**60 / np.abs(fet2).max()
+                        fet2 = (fet2 * factor).astype(dtype)
+                        
+                        # Write features to temporary file
+                        name = f'tempClustering_cluster{cid}'
+                        shank = 3
+                        mainfetfile = os.path.join(name + '.fet.' + str(shank))
+                        write_fet(fet2, mainfetfile)
+                        
+                        # Set up KlustaKwik command
+                        if platform.system() == 'Windows':
+                            program = os.path.join(phy_config_dir(), 'klustakwik.exe')
+                        else:
+                            program = '~/klustakwik/KlustaKwik'
+                        
+                        cmd = [program, name, str(shank)]
+                        cmd += ["-UseDistributional", '0', "-MaxPossibleClusters", '20', "-MinClusters", '20']
+                        
+                        # Run KlustaKwik
+                        p = Popen(cmd)
+                        p.wait()
+                        
+                        # Read back the clusters and split
+                        spike_clusters = read_clusters(name + '.clu.' + str(shank))
+                        controller.supervisor.actions.split(spike_ids, spike_clusters)
+                        
+                        # Clean up temporary files
+                        try:
+                            os.remove(mainfetfile)
+                            os.remove(name + '.clu.' + str(shank))
+                        except:
+                            pass
+                        
+                        logger.info(f"KlustaKwik reclustering complete for cluster {cid}")
+                        clusters_processed += 1
+                    
+                    logger.info(f"Completed: KlustaKwik reclustering on {clusters_processed} review clusters")
+                
+                except Exception as e:
+                    logger.error(f"Error in batch KlustaKwik: {str(e)}")
