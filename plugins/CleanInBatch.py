@@ -3,6 +3,8 @@
 from phy import IPlugin, connect
 import numpy as np
 import logging
+from scipy.cluster.vq import kmeans2, whiten
+from scipy.spatial.distance import cdist
 
 logger = logging.getLogger('phy')
 
@@ -13,7 +15,7 @@ class CleanInBatch(IPlugin):
         @connect
         def on_gui_ready(sender, gui):
             @controller.supervisor.actions.add(shortcut='shift+x', prompt=True, prompt_default=lambda: "9")
-            def Recluster_Good_HighFiringRate_Mahalanobis(threshold_str):
+            def Batch_Mahalanobis(threshold_str):
                 """Split clusters based on Mahalanobis distance outliers.
                 
                 Provide threshold value (default: 9)
@@ -105,3 +107,153 @@ class CleanInBatch(IPlugin):
 
                 except Exception as e:
                     logger.error(f"Error: {str(e)}")
+
+            @controller.supervisor.actions.add(shortcut='shift+k', prompt=True, prompt_default=lambda: "2")
+            def Batch_KMeans(kmeanclusters_str):
+                """Run K-means clustering on all 'review' clusters in batch.
+                
+                Provide number of clusters (default: 2)
+                """
+                logger.info("Starting batch K-means clustering on review clusters...")
+                
+                # Parse number of clusters from input
+                try:
+                    n_clusters = int(kmeanclusters_str)
+                    logger.info(f"Using {n_clusters} clusters for K-means")
+                except ValueError:
+                    n_clusters = 2
+                    logger.info(f"Invalid input. Using default: {n_clusters} clusters")
+                
+                try:
+                    # Get all cluster IDs and filter by 'review' group
+                    all_cluster_ids = controller.supervisor.clustering.cluster_ids
+                    review_clusters = []
+                    
+                    for cid in all_cluster_ids:
+                        group_label = controller.supervisor.cluster_meta.get('group', cid)
+                        if group_label == 'review':
+                            review_clusters.append(cid)
+                    
+                    if not review_clusters:
+                        logger.warn("No 'review' clusters found")
+                        return
+                    
+                    logger.info(f"Processing {len(review_clusters)} review clusters with K-means (k={n_clusters})")
+                    
+                    # Process each review cluster
+                    clusters_processed = 0
+                    
+                    for cid in review_clusters:
+                        # Get spikes for this cluster
+                        spike_ids = controller.supervisor.clustering.spikes_in_clusters([cid])
+                        
+                        if len(spike_ids) < n_clusters:
+                            logger.info(f"Cluster {cid} has too few spikes ({len(spike_ids)}), skipping")
+                            continue
+                        
+                        # Load features
+                        data = controller.model._load_features().data[spike_ids]
+                        data2 = np.reshape(data, (data.shape[0], data.shape[1] * data.shape[2]))
+                        
+                        # Whiten and cluster
+                        whitened = whiten(data2)
+                        clusters_out, label = kmeans2(whitened, n_clusters)
+                        
+                        # Split the cluster
+                        controller.supervisor.actions.split(spike_ids, label)
+                        logger.info(f"K-means split cluster {cid} into {n_clusters} groups")
+                        clusters_processed += 1
+                    
+                    logger.info(f"Completed: K-means clustering on {clusters_processed} review clusters")
+                
+                except Exception as e:
+                    logger.error(f"Error in batch K-means: {str(e)}")
+
+            @controller.supervisor.actions.add(shortcut='shift+i')
+            def Batch_ViolatedISI():
+                """Analyze and split short ISI violations on all 'review' clusters in batch.
+                
+                Uses spike times, amplitudes, and waveforms to detect suspicious spikes.
+                """
+                logger.info("Starting batch short ISI analysis on review clusters...")
+                
+                def analyze_suspicious_spikes(spike_times, spike_amps, waveforms, isi_threshold=0.0015):
+                    """Analyze spikes with multiple metrics"""
+                    n_spikes = len(spike_times)
+                    suspicious = np.zeros(n_spikes, dtype=bool)
+                    
+                    isi_prev = np.diff(spike_times, prepend=spike_times[0] - 1)
+                    isi_next = np.diff(spike_times, append=spike_times[-1] + 1)
+                    
+                    for i in range(n_spikes):
+                        if isi_prev[i] < isi_threshold or isi_next[i] < isi_threshold:
+                            # Check amplitude changes
+                            amp_window = slice(max(0, i - 1), min(n_spikes, i + 2))
+                            amp_variation = np.std(spike_amps[amp_window])
+                            
+                            # Check waveform changes
+                            wave_window = slice(max(0, i - 1), min(n_spikes, i + 2))
+                            waves = waveforms[wave_window]
+                            wave_distances = cdist(waves, waves, metric='correlation')
+                            wave_variation = np.mean(wave_distances)
+                            
+                            if (amp_variation > np.std(spike_amps) * 1.5 or wave_variation > 0.1):
+                                suspicious[i] = True
+                    
+                    return suspicious
+                
+                try:
+                    # Get all cluster IDs and filter by 'review' group
+                    all_cluster_ids = controller.supervisor.clustering.cluster_ids
+                    review_clusters = []
+                    
+                    for cid in all_cluster_ids:
+                        group_label = controller.supervisor.cluster_meta.get('group', cid)
+                        if group_label == 'review':
+                            review_clusters.append(cid)
+                    
+                    if not review_clusters:
+                        logger.warn("No 'review' clusters found")
+                        return
+                    
+                    logger.info(f"Processing {len(review_clusters)} review clusters for short ISI analysis")
+                    
+                    # Process each review cluster
+                    clusters_processed = 0
+                    total_suspicious = 0
+                    
+                    for cid in review_clusters:
+                        # Get spikes for this cluster
+                        spike_ids = controller.supervisor.clustering.spikes_in_clusters([cid])
+                        
+                        if len(spike_ids) < 10:
+                            continue
+                        
+                        # Get spike times
+                        spike_times = controller.model.spike_times[spike_ids]
+                        
+                        # Get amplitudes
+                        bunchs = controller._amplitude_getter([cid], name='template', load_all=True)
+                        spike_amps = bunchs[0].amplitudes
+                        
+                        # Get waveforms
+                        data = controller.model._load_features().data[spike_ids]
+                        waveforms = np.reshape(data, (data.shape[0], -1))
+                        
+                        # Analyze
+                        suspicious = analyze_suspicious_spikes(spike_times, spike_amps, waveforms)
+                        n_suspicious = np.sum(suspicious)
+                        
+                        # Split if found enough suspicious spikes
+                        if n_suspicious >= 10 and n_suspicious <= len(spike_ids) * 0.5:
+                            labels = np.ones(len(spike_ids), dtype=int)
+                            labels[suspicious] = 2
+                            controller.supervisor.actions.split(spike_ids, labels)
+                            logger.info(f"Cluster {cid}: split {n_suspicious} suspicious spikes ({n_suspicious/len(spike_ids)*100:.1f}%)")
+                            clusters_processed += 1
+                            total_suspicious += n_suspicious
+                    
+                    logger.info(f"Completed: Analyzed ISI on {len(review_clusters)} clusters, split {clusters_processed} clusters ({total_suspicious} suspicious spikes)")
+                
+                except Exception as e:
+                    logger.error(f"Error in batch short ISI: {str(e)}")
