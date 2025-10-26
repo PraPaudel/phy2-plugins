@@ -11,10 +11,13 @@ from phy import IPlugin, connect
 import numpy as np
 import logging
 from scipy.cluster.vq import kmeans2, whiten
-from scipy.spatial.distance import cdist
 import os
 import platform
 from subprocess import Popen
+
+# Import optimized cell metrics
+import CellMetrics
+from CellMetrics import analyze_cluster_quality
 
 logger = logging.getLogger('phy')
 
@@ -194,33 +197,9 @@ class CleanInBatch(IPlugin):
                 """Analyze and split short ISI violations on all 'review' clusters in batch.
                 
                 Uses spike times, amplitudes, and waveforms to detect suspicious spikes.
+                Uses optimized CellMetrics module.
                 """
                 logger.info("Starting batch short ISI analysis on review clusters...")
-                
-                def analyze_suspicious_spikes(spike_times, spike_amps, waveforms, isi_threshold=0.0015):
-                    """Analyze spikes with multiple metrics"""
-                    n_spikes = len(spike_times)
-                    suspicious = np.zeros(n_spikes, dtype=bool)
-                    
-                    isi_prev = np.diff(spike_times, prepend=spike_times[0] - 1)
-                    isi_next = np.diff(spike_times, append=spike_times[-1] + 1)
-                    
-                    for i in range(n_spikes):
-                        if isi_prev[i] < isi_threshold or isi_next[i] < isi_threshold:
-                            # Check amplitude changes
-                            amp_window = slice(max(0, i - 1), min(n_spikes, i + 2))
-                            amp_variation = np.std(spike_amps[amp_window])
-                            
-                            # Check waveform changes
-                            wave_window = slice(max(0, i - 1), min(n_spikes, i + 2))
-                            waves = waveforms[wave_window]
-                            wave_distances = cdist(waves, waves, metric='correlation')
-                            wave_variation = np.mean(wave_distances)
-                            
-                            if (amp_variation > np.std(spike_amps) * 1.5 or wave_variation > 0.1):
-                                suspicious[i] = True
-                    
-                    return suspicious
                 
                 try:
                     # Get all cluster IDs and filter by 'review' group
@@ -260,9 +239,10 @@ class CleanInBatch(IPlugin):
                         data = controller.model._load_features().data[spike_ids]
                         waveforms = np.reshape(data, (data.shape[0], -1))
                         
-                        # Analyze
-                        suspicious = analyze_suspicious_spikes(spike_times, spike_amps, waveforms)
-                        n_suspicious = np.sum(suspicious)
+                        # OPTIMIZED: Use CellMetrics for analysis
+                        results = analyze_cluster_quality(spike_times, spike_amps, waveforms)
+                        suspicious = results['suspicious_spikes']
+                        n_suspicious = results['n_suspicious']
                         
                         # Split if found enough suspicious spikes
                         if n_suspicious >= 10 and n_suspicious <= len(spike_ids) * 0.5:

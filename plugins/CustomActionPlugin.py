@@ -4,6 +4,7 @@ The following actions are implemented:
 - Ctrl+Shift+F: Selects the first (minimum) good cluster ID.
 - Ctrl+Shift+L: Selects the last (maximum) good cluster ID.
 - Ctrl+Shift+R: Marks selected clusters as 'review' (displays in crimson color).
+- Ctrl+Alt+R: Auto-mark all 'good' clusters with ISI violations as 'review'.
 - Ctrl+Shift+N: Selects the first cluster marked as 'review'.
 - Ctrl+Shift+V: Displays detailed information about 'good' clusters, including firing rate analysis.
 """
@@ -26,7 +27,18 @@ from matplotlib.colors import Normalize
 from matplotlib.ticker import MultipleLocator, AutoMinorLocator
 from phy.cluster.supervisor import ClusterView
 
+# Import optimized cell metrics functions
+import CellMetrics
+from CellMetrics import analyze_cluster_quality, NUMBA_AVAILABLE, get_numba_info
+
 logger = logging.getLogger('phy')
+
+# Log Numba status on module load
+numba_info = get_numba_info()
+if numba_info['numba_available']:
+    logger.info("CustomActionPlugin: Using Numba JIT acceleration (parallel mode)")
+else:
+    logger.info("CustomActionPlugin: Numba not available, using NumPy fallback")
 
 
 class CustomActionPlugin(IPlugin):
@@ -123,6 +135,73 @@ class CustomActionPlugin(IPlugin):
                 if selected_clusters:
                     for cluster_id in selected_clusters:
                         controller.supervisor.cluster_meta.set('group', cluster_id, 'review')
+
+            @controller.supervisor.actions.add(shortcut='ctrl+alt+r')
+            def mark_for_review_cell_metrics_based():
+                """Automatically mark all 'good' clusters with ISI violations as 'review' (Numba-optimized)."""
+                
+                if NUMBA_AVAILABLE:
+                    logger.info("Analyzing with Numba JIT acceleration (parallel mode)...")
+                else:
+                    logger.info("Analyzing (Numba not available, using NumPy fallback)...")
+                
+                cluster_ids = controller.supervisor.clustering.cluster_ids
+                good_clusters = []
+                
+                # Find all good clusters
+                for cl in cluster_ids:
+                    group_label = controller.supervisor.cluster_meta.get('group', cl)
+                    if group_label == 'good':
+                        good_clusters.append(cl)
+                
+                if not good_clusters:
+                    logger.info("No 'good' clusters found")
+                    return
+                
+                logger.info(f"Analyzing {len(good_clusters)} good clusters for ISI violations...")
+                
+                marked_count = 0
+                # MORE RELAXED PARAMETERS for fewer false positives
+                isi_threshold = 0.0015  # 1.5ms - ISI violation threshold
+                amp_factor = 3.0  # Amplitude variation threshold (more relaxed - was 2.5)
+                wave_threshold = 0.25  # Waveform variance threshold (more relaxed - was 0.2)
+                min_suspicious = 50  # Minimum suspicious spikes to mark (more relaxed - was 30)
+                max_suspicious_pct = 0.3  # Max 30% of spikes can be suspicious (was 50%)
+                
+                for cid in good_clusters:
+                    # Get spikes for this cluster
+                    spike_ids = controller.supervisor.clustering.spikes_in_clusters([cid])
+                    
+                    if len(spike_ids) < 10:
+                        continue
+                    
+                    # Get spike times
+                    spike_times = controller.model.spike_times[spike_ids]
+                    
+                    # Get amplitudes
+                    bunchs = controller._amplitude_getter([cid], name='template', load_all=True)
+                    spike_amps = bunchs[0].amplitudes
+                    
+                    # Get waveforms
+                    data = controller.model._load_features().data[spike_ids]
+                    waveforms = np.reshape(data, (data.shape[0], -1))
+                    
+                    # ULTRA-OPTIMIZED: Use CellMetrics high-level function
+                    results = analyze_cluster_quality(
+                        spike_times, spike_amps, waveforms,
+                        isi_threshold, amp_factor, wave_threshold
+                    )
+                    
+                    n_suspicious = results['n_suspicious']
+                    
+                    # Mark for review if suspicious spikes found (more strict criteria)
+                    if n_suspicious >= min_suspicious and n_suspicious <= len(spike_ids) * max_suspicious_pct:
+                        controller.supervisor.cluster_meta.set('group', cid, 'review')
+                        pct = (float(n_suspicious) / float(len(spike_ids))) * 100.0
+                        logger.info(f"Cluster {cid}: marked for review ({n_suspicious}/{len(spike_ids)} suspicious spikes, {pct:.1f}%)")
+                        marked_count += 1
+                
+                logger.info(f"Completed: Marked {marked_count} clusters for review out of {len(good_clusters)} good clusters")
 
             @controller.supervisor.actions.add(shortcut='ctrl+shift+n')
             def select_first_review():
